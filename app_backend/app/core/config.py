@@ -5,24 +5,32 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 import os
-from pydantic_settings import BaseSettings,SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
-BASE_DIR = os.path.dirname(__file__)
-ENV_PATH = os.path.join(BASE_DIR, "..", ".env")
+
+BASE_DIR = os.path.dirname(__file__) 
+ENV_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", ".env"))  # Path: app_backend/app/.env
 
 class GmailAuth(BaseSettings):
     CLIENT_SECRET_FILE: str
     API_SERVICE_NAME: str
     API_VERSION: str
     SCOPES: List[str]
-    PREFIX: str  
-    model_config = SettingsConfigDict(env_file=ENV_PATH)
+    PREFIX: str
+
+    model_config = SettingsConfigDict(env_file=ENV_PATH)  # Load .env automatically
+
     def create_service(self):
         working_dir = os.getcwd()
         token_dir = "token_files"
         token_file = f"token_{self.API_SERVICE_NAME}_{self.API_VERSION}{self.PREFIX}.json"
         token_path = os.path.join(working_dir, token_dir, token_file)
+
         os.makedirs(os.path.join(working_dir, token_dir), exist_ok=True)
+
+        client_secret_path = os.path.abspath(
+            os.path.join(BASE_DIR, "../../../", self.CLIENT_SECRET_FILE)
+        )
 
         creds = None
         if os.path.exists(token_path):
@@ -32,8 +40,9 @@ class GmailAuth(BaseSettings):
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
+                
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    self.CLIENT_SECRET_FILE, self.SCOPES
+                    client_secret_path, self.SCOPES
                 )
                 creds = flow.run_local_server(port=0)
                 with open(token_path, "w") as token:
@@ -44,7 +53,7 @@ class GmailAuth(BaseSettings):
                 self.API_SERVICE_NAME,
                 self.API_VERSION,
                 credentials=creds,
-                static_discovery=False
+                static_discovery=False,
             )
             print("Authentication successful")
             return service
