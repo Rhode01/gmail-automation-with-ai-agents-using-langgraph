@@ -62,3 +62,4 @@ class GmailAuth(BaseSettings):
                 os.remove(token_path)
             print(f"An error occurred: {error}")
             return None
+gmail_auth = GmailAuth()
