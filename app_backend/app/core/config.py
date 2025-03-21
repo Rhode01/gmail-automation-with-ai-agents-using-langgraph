@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
 BASE_DIR = os.path.dirname(__file__) 
-ENV_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", ".env"))  # Path: app_backend/app/.env
+ENV_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", ".env")) 
 
 class GmailAuth(BaseSettings):
     CLIENT_SECRET_FILE: str
@@ -18,7 +18,7 @@ class GmailAuth(BaseSettings):
     SCOPES: List[str]
     PREFIX: str
 
-    model_config = SettingsConfigDict(env_file=ENV_PATH)  # Load .env automatically
+    model_config = SettingsConfigDict(env_file=ENV_PATH) 
 
     def create_service(self):
         working_dir = os.getcwd()
