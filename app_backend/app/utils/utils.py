@@ -2,20 +2,29 @@ from typing import List, Dict, Any, Tuple
 from app_backend.app.core.config import gmail_auth
 import base64
 from googleapiclient.errors import HttpError 
+import os
+import json
 
 class GmailBase:
-    def __init__(self, label: str, max_results=5):
+    def __init__(self, label: str, max_results: int = 5):
         self.label = label
         self.content = []
         self.service = gmail_auth.create_service()
-        self.max_results = max_results  
+        self.max_results = max_results
+        self.cache_dir = "gmail_cache"
+        os.makedirs(self.cache_dir, exist_ok=True)
         if not self.service:
             raise Exception("Failed to authenticate Gmail service")
 
     def load_label_message(self) -> List[Dict[str, Any]]:
         try:
+            
             if not self.label:
                 return []
+            cache_file = os.path.join(self.cache_dir, f"{self.label}_messages.json")
+            if os.path.exists(cache_file):
+                with open(cache_file, "r") as f:
+                    return json.load(f)
 
             results = self.service.users().labels().list(userId='me').execute()
             labels = results.get('labels', [])
@@ -30,28 +39,34 @@ class GmailBase:
                 raise ValueError(f"Label '{self.label}' not found in Gmail")
             
             self.label_id = [folder_label_id]
-
+            batch_size = 20
             messages = []
             page_token = None
             
             while True:
+                max_results_value = (
+                    min(500, self.max_results - len(messages)) 
+                    if self.max_results else 500
+                )
+                max_results_value = max(1, max_results_value)
                 results = self.service.users().messages().list(
                     userId='me',
                     labelIds=self.label_id,
-                    maxResults=(min(500, self.max_results - len(messages)) 
-                               if self.max_results else 500),
+                    maxResults= batch_size,
                     pageToken=page_token
                 ).execute()
                 
                 messages.extend(results.get('messages', []))
                 page_token = results.get('nextPageToken')
-                if not page_token:
+                if not page_token or (self.max_results and len(messages) >= self.max_results):
                     break
 
-            self.content = [self.get_email_message_details(msg['id']) 
-                           for msg in messages]
+            self.content = [self.get_email_message_details(msg['id'])
+                            for msg in messages
+                             ]
+            with open(cache_file, "w") as f:
+                json.dump(messages, f)            
             return self.content
-
         except HttpError as http_err:
             print(f"API error: {http_err}")
             return []
