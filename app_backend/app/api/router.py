@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from app_backend.app.core.config import gmail_auth
 from fastapi import Depends
+import email
 router = APIRouter()
 
 

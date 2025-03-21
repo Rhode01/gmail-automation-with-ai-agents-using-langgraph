@@ -1,82 +1,131 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from app_backend.app.core.config import gmail_auth
 import base64
+from googleapiclient.errors import HttpError 
 
 class GmailBase:
     def __init__(self, label: str):
         self.label = label
         self.content = []
         self.service = gmail_auth.create_service()
+        self.max_results = 5  
         if not self.service:
             raise Exception("Failed to authenticate Gmail service")
 
     def load_label_message(self) -> List[Dict[str, Any]]:
         try:
+            if not self.label:
+                return []
+
+            results = self.service.users().labels().list(userId='me').execute()
+            labels = results.get('labels', [])
+            
+            folder_label_id = next(
+                (label['id'] for label in labels 
+                 if label.get('name', '').lower() == self.label.lower()), 
+                None
+            )
+            
+            if not folder_label_id:
+                raise ValueError(f"Label '{self.label}' not found in Gmail")
+            
+            self.label_id = [folder_label_id]
+
             messages = []
             page_token = None
+            
             while True:
                 results = self.service.users().messages().list(
                     userId='me',
-                    labelIds=[self.label],
+                    labelIds=self.label_id,
+                    maxResults=(min(500, self.max_results - len(messages)) 
+                               if self.max_results else 500),
                     pageToken=page_token
                 ).execute()
+                
                 messages.extend(results.get('messages', []))
                 page_token = results.get('nextPageToken')
                 if not page_token:
                     break
-            self.content = []
-            for msg in messages:
-                msg_id = msg['id']
-                message_details = self.get_email_message_details(msg_id)
-                self.content.append(message_details)
+
+            self.content = [self.get_email_message_details(msg['id']) 
+                           for msg in messages]
             return self.content
+
+        except HttpError as http_err:
+            print(f"API error: {http_err}")
+            return []
+        except ValueError as ve:
+            print(f"Configuration error: {ve}")
+            return []
         except Exception as e:
-            print(f"Error loading messages: {e}")
+            print(f"Unexpected error: {e}")
             return []
 
-    def extract_message_body(self, payload: Dict) -> str:
-        body = []
-        parts = payload.get('parts', [])
-        if parts:
-            for part in parts:
-                part_body = self.extract_message_body(part)
-                if part_body:
-                    body.append(part_body)
-        else:
-            mime_type = payload.get('mimeType', '')
-            if mime_type.startswith('text/'):
-                data = payload.get('body', {}).get('data', '')
-                if data:
-                    try:
-                        decoded = base64.urlsafe_b64decode(data).decode('utf-8')
-                        body.append(decoded)
-                    except Exception as e:
-                        print(f"Error decoding message body: {e}")
-        return '\n'.join(body)
+    def extract_message_content(self, payload: Dict) -> Tuple[str, List[Dict]]:
+        body_parts = []
+        attachments = []
+        self._process_parts(payload.get('parts', []), body_parts, attachments)
+        
+        if not payload.get('parts') and 'body' in payload:
+            body_data = payload['body'].get('data')
+            if body_data:
+                body_parts.append(base64.urlsafe_b64decode(body_data).decode('utf-8'))
+        
+        return '\n'.join(body_parts), attachments
 
-    def get_email_message(self, msg_id: str) -> Dict:
-        """Retrieve a message by ID."""
-        try:
-            return self.service.users().messages().get(userId='me', id=msg_id).execute()
-        except Exception as e:
-            print(f"Error retrieving message {msg_id}: {e}")
-            return {}
+    def _process_parts(self, parts: List[Dict], 
+                      body_parts: List[str], 
+                      attachments: List[Dict]) -> None:
+        for part in parts:
+            mime_type = part.get('mimeType', '')
+            filename = part.get('filename', '')
+            
+            if filename:  
+                attachments.append({
+                    'filename': filename,
+                    'size': part['body'].get('size', 0),
+                    'attachment_id': part['body'].get('attachmentId')
+                })
+            elif mime_type == 'text/plain' and 'data' in part.get('body', {}):
+                body_parts.append(base64.urlsafe_b64decode(
+                    part['body']['data']).decode('utf-8'))
+            elif mime_type.startswith('multipart/'):
+                self._process_parts(part.get('parts', []), body_parts, attachments)
 
     def get_email_message_details(self, msg_id: str) -> Dict[str, Any]:
         message = self.get_email_message(msg_id)
         if not message:
             return {}
+            
         payload = message.get('payload', {})
         headers = payload.get('headers', [])
+        body_content, attachments = self.extract_message_content(payload)
         
         return {
             'id': msg_id,
             'subject': self._get_header(headers, 'Subject'),
             'from': self._get_header(headers, 'From'),
             'date': self._get_header(headers, 'Date'),
-            'body': self.extract_message_body(payload)
+            'body': body_content,
+            'has_attachment': len(attachments) > 0,
+            'attachments': attachments
         }
+
+    def get_email_message(self, msg_id: str) -> Dict:
+        try:
+            return self.service.users().messages().get(
+                userId='me', 
+                id=msg_id
+            ).execute()
+        except HttpError as http_err:
+            print(f"API error retrieving message {msg_id}: {http_err}")
+            return {}
+        except Exception as e:
+            print(f"Unexpected error retrieving message {msg_id}: {e}")
+            return {}
 
     @staticmethod
     def _get_header(headers: List[Dict], name: str) -> str:
-        return next((h['value'] for h in headers if h['name'] == name), '')
+        return next((h['value'] for h in headers 
+                     if h['name'].lower() == name.lower()), '')
