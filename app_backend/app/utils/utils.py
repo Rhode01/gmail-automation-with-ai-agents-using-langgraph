@@ -65,7 +65,7 @@ class GmailBase:
                             for msg in messages
                              ]
             with open(cache_file, "w") as f:
-                json.dump(messages, f)            
+                json.dump(self.content, f, indent=4)            
             return self.content
         except HttpError as http_err:
             print(f"API error: {http_err}")
