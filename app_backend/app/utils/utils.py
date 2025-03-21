@@ -4,11 +4,11 @@ import base64
 from googleapiclient.errors import HttpError 
 
 class GmailBase:
-    def __init__(self, label: str):
+    def __init__(self, label: str, max_results=5):
         self.label = label
         self.content = []
         self.service = gmail_auth.create_service()
-        self.max_results = 5  
+        self.max_results = max_results  
         if not self.service:
             raise Exception("Failed to authenticate Gmail service")
 
