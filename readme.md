@@ -35,4 +35,4 @@ AI-powered email automation system with document processing capabilities, built 
 graph TD
     A[Gmail API] --> B((OAuth 2.0))
     B --> C{Email Processor}
-    C -->|Attachments| D[Document Parser]
+    C -->|Attachments| D[Document Parser] ```
