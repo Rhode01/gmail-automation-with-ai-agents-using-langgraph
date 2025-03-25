@@ -4,6 +4,7 @@ import base64
 from googleapiclient.errors import HttpError 
 import os
 import json
+from bs4 import BeautifulSoup
 
 class GmailBase:
     def __init__(self, label: str, max_results: int = 5):
@@ -144,3 +145,7 @@ class GmailBase:
     def _get_header(headers: List[Dict], name: str) -> str:
         return next((h['value'] for h in headers 
                      if h['name'].lower() == name.lower()), '')
+
+class GmailCRUDBase:
+    def __init__(self):
+        pass
