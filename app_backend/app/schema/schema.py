@@ -27,7 +27,7 @@ class SendMessageRequest(BaseModel):
         ...,
         description="Recipient email address",
         example="recipient@example.com",
-        regex=r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+        pattern="^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
     )
     subject: str = Field(
         ...,

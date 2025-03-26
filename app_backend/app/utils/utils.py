@@ -5,9 +5,6 @@ from googleapiclient.errors import HttpError
 import os
 import json
 from email.mime.text import MIMEText
-import logging
-
-logger = logging(__file__)
 class GmailBase:
     def __init__(self, label: str, max_results: int = 5):
         self.label = label
