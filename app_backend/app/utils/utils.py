@@ -4,8 +4,10 @@ import base64
 from googleapiclient.errors import HttpError 
 import os
 import json
-from bs4 import BeautifulSoup
+from email.mime.text import MIMEText
+import logging
 
+logger = logging(__file__)
 class GmailBase:
     def __init__(self, label: str, max_results: int = 5):
         self.label = label
@@ -112,8 +114,7 @@ class GmailBase:
     def get_email_message_details(self, msg_id: str) -> Dict[str, Any]:
         message = self.get_email_message(msg_id)
         if not message:
-            return {}
-            
+            return {'status': 'no messages found'}  
         payload = message.get('payload', {})
         headers = payload.get('headers', [])
         body_content, attachments = self.extract_message_content(payload)
@@ -147,5 +148,120 @@ class GmailBase:
                      if h['name'].lower() == name.lower()), '')
 
 class GmailCRUDBase:
-    def __init__(self):
-        pass
+    def __init__(self, gmail_base: 'GmailBase'):
+        self.gmail_base = gmail_base
+
+    def create_email(self, to:str, subject:str, body:str,user_id :str = 'me') -> Dict:
+        try:
+            message = MIMEText(body)
+            message['to']=to
+            message['subject']= subject
+            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+            sent_message = self.gmail_base.base.service.users().messages.send(
+                userId = user_id,
+                body= {'raw':raw_message}
+            ).execute()
+            return {
+                'success':'success'
+            }
+        except Exception as e:
+            pass
+    def read_email(self, message_id: str, user_id: str = 'me') -> Dict:
+        try:
+            return self.gmail_base.get_email_message_details(message_id)
+        except HttpError as error:
+            return {
+                'status': 'error',
+                'message': f'An error occurred: {error}'
+            }
+
+    def delete_email(self, message_id: str, user_id: str = 'me') -> Dict:
+        try:
+            self.gmail_base.service.users().messages().trash(
+                userId=user_id,
+                id=message_id
+            ).execute()
+            
+            return {
+                'status': 'success',
+                'message': 'Email moved to trash'
+            }
+        except HttpError as error:
+            return {
+                'status': 'error',
+                'message': f'An error occurred: {error}'
+            }
+    def reply_to_email(self, message_id: str, reply_body: str, 
+                      quote_original: bool = True, 
+                      user_id: str = 'me') -> Dict:
+        try:
+            original = self.gmail_base.service.users().messages().get(
+                userId=user_id,
+                id=message_id,
+                format='full'
+            ).execute()
+            
+            payload = original.get('payload', {})
+            headers = payload.get('headers', [])
+            
+            message_id_header = self._get_header(headers, 'Message-ID')
+            from_header = self._get_header(headers, 'From')
+            subject_header = self._get_header(headers, 'Subject', 'No subject')
+            thread_id = original.get('threadId')
+
+            reply_subject = f"Re: {subject_header}"
+            mime_msg = MIMEText(self._prepare_reply_body(
+                reply_body, 
+                original,
+                quote_original
+            ))
+            
+            mime_msg['To'] = from_header
+            mime_msg['Subject'] = reply_subject
+            mime_msg['In-Reply-To'] = message_id_header
+            mime_msg['References'] = f"{message_id_header} {message_id_header}"
+            
+            raw_message = base64.urlsafe_b64encode(
+                mime_msg.as_bytes()
+            ).decode('utf-8')
+            
+            sent_message = self.gmail_base.service.users().messages().send(
+                userId=user_id,
+                body={
+                    'raw': raw_message,
+                    'threadId': thread_id
+                }
+            ).execute()
+            
+            return {
+                'status': 'success',
+                'message_id': sent_message['id'],
+                'thread_id': thread_id
+            }
+
+        except HttpError as error:
+            return {
+                'status': 'error',
+                'message': f'An error occurred: {error}'
+            }
+
+    def _prepare_reply_body(self, reply_text: str, original_msg: Dict, 
+                           quote: bool) -> str:
+        if not quote:
+            return reply_text
+            
+        original_body = self.gmail_base.get_email_message_details(
+            original_msg['id']
+        ).get('body', '')
+        
+        quoted = '\n'.join([f"> {line}" for line in original_body.split('\n')])
+        return f"{reply_text}\n\n\n--- Original Message ---\n{quoted}"
+
+    @staticmethod
+    def _get_header(headers: List[Dict], name: str, default: str = '') -> str:
+        return next(
+            (h['value'] for h in headers 
+             if h['name'].lower() == name.lower()),
+            default
+        )
+        
