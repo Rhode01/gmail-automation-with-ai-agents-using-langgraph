@@ -6,7 +6,7 @@ class AIModel:
         return ChatOpenAI(
             temperature=0,
             model="gpt-4-turbo",
-            max_tokens=600, 
+            max_tokens=1000, 
             request_timeout=30,
             max_retries=3,
             client=None,
@@ -14,4 +14,4 @@ class AIModel:
             verbose=False
         )
 
-client= AIModel().model()
+client= AIModel()

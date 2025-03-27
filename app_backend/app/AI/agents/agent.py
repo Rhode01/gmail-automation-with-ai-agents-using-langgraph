@@ -9,7 +9,7 @@ import os
 from app_backend.app.AI.core.config import client
 from app_backend.app.AI.templates.templates import email_template
 from langchain.prompts import ChatPromptTemplate
-class agentState(StateGraph):
+class agentState(TypedDict):
     email_id: str
     email_content: str
     analysis_result: Optional[dict]
@@ -19,7 +19,7 @@ class EmailAgent:
     def __init__(self, gmail_base,gmailBaseCrud):
         self.gmail_base = gmail_base
         self.gmail_crud = gmailBaseCrud
-        self.model = client
+        self.model = client.model
         self.tools = self._register_tools()
         self.model = self.model.bind_tools(self.tools)
         self.graph = self._setup_graph()    
@@ -51,14 +51,14 @@ class EmailAgent:
         graph = StateGraph(agentState)
         
         graph.add_node("analyze_email", self.analyze_email)
-        graph.add_node("execute_action", self.execute_action)
+        # graph.add_node("execute_action", self.execute_action)
         
-        graph.add_edge("analyze_email", "execute_action")
-        graph.add_conditional_edges(
-            "execute_action",
-            self._determine_next_step,
-            {True: "analyze_email", False: END}
-        )
+        # graph.add_edge("analyze_email", "execute_action")
+        # graph.add_conditional_edges(
+        #     "execute_action",
+        #     self._determine_next_step,
+        #     {True: "analyze_email", False: END}
+        # )
         graph.set_entry_point("analyze_email")
         return graph.compile()
 
@@ -107,11 +107,11 @@ class EmailAgent:
                 "args": llm_response.tool_calls[0].arguments
             }
         return None
-    def process_unread_emails(self):
+    async def process_unread_emails(self):
         unread_emails = self.gmail_base.load_label_message()
-        for email in unread_emails:
-            state = agentState(
-                email_id=email['id'],
-                email_content=email['body']
-            )
-            self.graph.invoke(state)
+        # for email in unread_emails:
+        state = agentState(
+            email_id=unread_emails[0]['id'],
+            email_content= unread_emails[0]['body']
+        )
+        self.graph.invoke(state)

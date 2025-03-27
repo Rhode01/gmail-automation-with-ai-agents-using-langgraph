@@ -8,7 +8,9 @@ from app_backend.app.schema.schema import (
     ReplyMessageRequest
 )
 from typing import Dict, List
+from app_backend.app.AI.agents.agent import EmailAgent
 router = APIRouter()
+
 
 @router.get("/email/auth-status")
 def check_auth_status() -> Dict[str, bool]:
@@ -93,3 +95,10 @@ async def delete_email(request: MessageIdRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete email: {str(e)}"
         )
+@router.get("/email/auto_reply")
+async def email_auto_reply():
+    gmail_base = GmailBase("UNREAD",10)
+    gmail_crud = GmailCRUDBase(gmail_base)
+    agent = EmailAgent(gmail_base, gmail_crud)
+    results = await agent.process_unread_emails()
+    return results
