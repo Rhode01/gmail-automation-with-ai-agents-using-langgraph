@@ -1,5 +1,5 @@
-email_triage_template = """
-ROLE: Email Triage Specialist
+email_template = """
+ROLE: Email Specialist
 OBJECTIVE: Analyze email content to determine urgency and required response complexity
 
 You are an expert in email analysis. Given an email body, you will:
@@ -27,18 +27,17 @@ PROCESSING PHASES:
      * Generate custom response
      * Flag for human review
 
-EXPECTED OUTPUT FORMAT:
-{
+EXPECTED OUTPUT FORMAT DICT:
+
   "urgency_level": "low|medium|high",
   "requires_immediate_response": bool,
   "tone_analysis": "formal|casual|urgent|technical",
   "key_phrases": ["phrase1", "phrase2"],
   "response_complexity": "simple|moderate|complex"
-}
 
 Email Body:
 {email_content}
-"""
+""".strip()
 
 response_generation_template = """
 ROLE: Automated Response Architect
@@ -66,12 +65,12 @@ PROCESSING PHASES:
    - Ensure proper disclaimers
    - Confirm tone consistency
 
-EXPECTED OUTPUT FORMAT:
-{
+EXPECTED OUTPUT FORMAT DICT:
+
   "draft_response": "Response text",
   "confidence_score": 0.0-1.0,
   "recommended_actions": ["Send", "Review", "Revise"]
-}
+
 
 Analysis Results:
 {analysis_results}
