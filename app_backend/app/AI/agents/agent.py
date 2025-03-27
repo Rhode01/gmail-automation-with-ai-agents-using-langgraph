@@ -7,6 +7,7 @@ from pydantic import Field
 from langchain_core.tools import tool
 import os
 from app_backend.app.AI.core.config import client
+from ap
 
 class agentState(StateGraph):
     email_content: str 
@@ -53,34 +54,42 @@ class EmailAgent:
         graph.add_node("analyze_email", self.analyze_email)
         graph.add_node("execute_action", self.execute_action)
         
-        # Edges
         graph.add_edge("analyze_email", "execute_action")
         graph.add_conditional_edges(
             "execute_action",
             self._determine_next_step,
             {True: "analyze_email", False: END}
         )
-        
-        # Entry point
         graph.set_entry_point("analyze_email")
-        
         return graph.compile()
 
 
-    def take_action(self, state: agentState):
-        tool_call = state.get('tool_call')
-        tool_name = tool_call['name']
-        tool_args = tool_call['arguments']
+    def execute_action(self, state: agentState):
+        if state.get("requires_human"):
+            return {**state, "status": "Flagged for human review"}
         
-        tool_map = {
-            'send_email_tool': self.send_email_tool,
-            'read_email_tool': self.read_email_tool,
-            'delete_email_tool': self.delete_email_tool,
-            'reply_email_tool': self.reply_email_tool
-        }
+        tool_call = state["tool_call"]
+        tool = next((t for t in self.tools if t.name == tool_call["name"]), None)
         
-        result = tool_map[tool_name].invoke(tool_args)
-        return {'tool_response': result}
+        if tool:
+            try:
+                result = tool.invoke(tool_call["args"])
+                return {**state, "tool_response": result}
+            except Exception as e:
+                return {**state, "error": str(e)}
+        return state
+    def analyze_email(self, state: agentState):
+        try:
+            response = self.model.invoke(analysis_prompt)
+            tool_call = self._parse_tool_call(response)
+            
+            return {
+                **state,
+                "analysis_result": response,
+                "tool_call": tool_call
+            }
+        except Exception as e:
+            return {**state, "requires_human": True}
     def call_openaicall_openai(self):
         
         return
