@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import AnyMessage, HumanMessage, ToolMessage, AIMessage
-from typing import Annotated, TypedDict,List
+from typing import Annotated, TypedDict,List,Optional
 from operator import add
 from pydantic import Field
 from langchain_core.tools import tool
@@ -10,12 +10,11 @@ from app_backend.app.AI.core.config import client
 from app_backend.app.AI.templates.templates import email_template
 from langchain.prompts import ChatPromptTemplate
 class agentState(StateGraph):
-    email_content: str 
-    has_attachment:bool = Field(..., default=False)
-    attachments :List[None]
-    to: str = Field(...,description="The email of the person to send the email")
-    from_ : str = Field(..., default="me")
-
+    email_id: str
+    email_content: str
+    analysis_result: Optional[dict]
+    tool_response: Optional[dict]
+    requires_human: bool
 class EmailAgent:
     def __init__(self, gmail_base,gmailBaseCrud):
         self.gmail_base = gmail_base
@@ -83,7 +82,7 @@ class EmailAgent:
             prompt = ChatPromptTemplate.from_template(email_template)
             chain = prompt | self.model
             response = chain.invoke(
-                {"email_content":email_body}
+                {"email_content":state['email_content']}
             )
             tool_call = self._parse_tool_call(response)
             
