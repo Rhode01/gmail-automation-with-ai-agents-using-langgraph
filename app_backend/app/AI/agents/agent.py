@@ -7,8 +7,8 @@ from pydantic import Field
 from langchain_core.tools import tool
 import os
 from app_backend.app.AI.core.config import client
-from ap
-
+from app_backend.app.AI.templates.templates import email_template
+from langchain.prompts import ChatPromptTemplate
 class agentState(StateGraph):
     email_content: str 
     has_attachment:bool = Field(..., default=False)
@@ -80,7 +80,11 @@ class EmailAgent:
         return state
     def analyze_email(self, state: agentState):
         try:
-            response = self.model.invoke(analysis_prompt)
+            prompt = ChatPromptTemplate.from_template(email_template)
+            chain = prompt | self.model
+            response = chain.invoke(
+                {"email_content":email_body}
+            )
             tool_call = self._parse_tool_call(response)
             
             return {
@@ -90,9 +94,25 @@ class EmailAgent:
             }
         except Exception as e:
             return {**state, "requires_human": True}
-    def call_openaicall_openai(self):
-        
-        return
-    def exists_action(self, state:agentState):
-        result = state['message'][-1]
-        return len(result.tool_calls)>0
+
+    def _determine_next_step(self, state: agentState):
+        return (
+            "tool_call" in state and
+            state["tool_call"] is not None and
+            not state.get("requires_human", False)
+        )
+    def _parse_tool_call(self, llm_response):
+        if hasattr(llm_response, 'tool_calls') and llm_response.tool_calls:
+            return {
+                "name": llm_response.tool_calls[0].name,
+                "args": llm_response.tool_calls[0].arguments
+            }
+        return None
+    def process_unread_emails(self):
+        unread_emails = self.gmail_base.load_label_message()
+        for email in unread_emails:
+            state = agentState(
+                email_id=email['id'],
+                email_content=email['body']
+            )
+            self.graph.invoke(state)
